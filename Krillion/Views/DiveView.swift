@@ -128,20 +128,45 @@ struct DiveView: View {
 
     private var answerInput: some View {
         VStack(spacing: 12) {
-            // GUI object: text field
+            // GUI object: text field (autocorrect on, so typos get fixed before scoring)
             TextField("Type your answer…", text: $vm.input)
                 .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
+                .autocorrectionDisabled(false)
                 .submitLabel(.go)
                 .focused($fieldFocused)
-                .onSubmit { Task { await vm.submit() } }
+                .onSubmit { submitAnswer() }
                 .padding()
                 .background(Theme.foam.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(vm.rejectedAnswer == nil ? .clear : Theme.krill, lineWidth: 2)
+                )
                 .foregroundStyle(Theme.foam)
 
+            // Wrong guess: stay on this question and let them try again while time remains.
+            if let rejected = vm.rejectedAnswer {
+                Label("“\(rejected)” isn't on the list. Try again!", systemImage: "xmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.krill)
+                    .multilineTextAlignment(.center)
+                    .id(vm.wrongAttempts)   // re-animates on every new wrong guess
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+
             // GUI object: button
-            Button("Submit") { Task { await vm.submit() } }
+            Button("Submit") { submitAnswer() }
                 .buttonStyle(PrimaryButtonStyle())
+        }
+    }
+
+    /// Scores the typed answer. Wrong guesses keep the field focused so the
+    /// player can immediately try again.
+    private func submitAnswer() {
+        Task {
+            await vm.submit()
+            if case .answering = vm.phase {
+                withAnimation(.snappy) { fieldFocused = true }
+            }
         }
     }
 
